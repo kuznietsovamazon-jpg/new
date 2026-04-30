@@ -10,6 +10,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Amazon Intelligence Hub", layout="wide")
 
+# --- GLOBAL STATE ---
 if 'monitor_running' not in st.session_state:
     st.session_state.monitor_running = False
 
@@ -20,6 +21,7 @@ client = KeepaClient()
 st.title("🏢 Amazon Competitor Intelligence Hub")
 st.markdown("Мониторинг цен, продаж (BSR) и контента конкурентов")
 
+# --- BACKGROUND MONITOR LOGIC ---
 def run_monitor_cycle():
     asins = db.get_all_tracked_asins()
     if not asins:
@@ -44,11 +46,13 @@ def monitor_thread_loop():
         run_monitor_cycle()
         time.sleep(3600)
 
+# Start background thread if not running
 if not st.session_state.monitor_running:
-    thread = threading.Thread(target=monitor_// la l'en_loop, daemon=True)
+    thread = threading.Thread(target=monitor_thread_loop, daemon=True)
     thread.start()
     st.session_state.monitor_running = True
 
+# --- SIDEBAR ---
 st.sidebar.header("📁 Projects")
 with st.sidebar.expander("➕ New Project"):
     new_proj_name = st.text_input("Project Name").strip()
@@ -74,6 +78,7 @@ if st.sidebar.button("Add"):
             st.sidebar.success("Added!")
             st.rerun()
 
+# --- MAIN ---
 st.header(f"Project: {selected_project_name}")
 
 col_sync_1, _ = st.columns([1, 4])
@@ -95,13 +100,18 @@ else:
         price = db.get_last_price(asin)
         details = db.get_product_details(asin) or {}
         
+        with db.get_connection() as conn:
+            res = conn.execute(f"SELECT timestamp FROM price_history WHERE asin='{asin}' ORDER BY timestamp DESC LIMIT 1").fetchone()
+            ts = res[0] if res else "Never"
+            
         overview_data.append({
             "ASIN": asin, 
             "Price": price if price else "N/A",
             "BSR (Rank)": details.get('sales_rank', 'N/A'),
             "Rating": details.get('reviews_rating', 'N/A'),
             "Reviews": details.get('reviews_count', 'N/A'),
-            "Images": details.get('images_count', 'N/A')
+            "Images": details.get('images_count', 'N/A'),
+            "Last Updated": ts
         })
     
     st.dataframe(pd.DataFrame(overview_data), use_container_width=True)
