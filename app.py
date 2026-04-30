@@ -77,7 +77,7 @@ col_sync_1, _ = st.columns([1, 4])
 with col_sync_1:
     if st.button("🔄 Sync All Data"):
         with st.spinner("Fetching from Amazon..."):
-            result = run_monitor_cycle()
+            result = run_// l'en_monitor_cycle()
             st.toast(result)
             st.rerun()
 
@@ -121,7 +121,7 @@ else:
         with db.get_connection() as conn:
             query = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
             df_history = pd.read_sql_query(query, conn)
-        if not df_// la l'en_history.empty:
+        if not df_history.empty:
             df_history['timestamp'] = pd.to_datetime(df_history['timestamp'])
             fig = px.line(df_history, x='timestamp', y='price', title=f"Price Trend: {selected_asin}", markers=True)
             fig.update_traces(line_color='#ff9900', line_width=3)
