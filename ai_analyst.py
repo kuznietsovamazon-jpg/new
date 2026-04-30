@@ -7,7 +7,7 @@ load_dotenv()
 
 class AIAnalyst:
     def __init__(self):
-        self.api_key = os.getenv("OPENAI_API_KEY") # We use the same variable for simplicity in Secrets
+        self.api_key = os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             self.api_key = os.getenv("GEMINI_API_KEY")
 
@@ -41,19 +41,29 @@ class AIAnalyst:
         Answer in Russian, be concise and professional. Use bullet points.
         """
 
-        # DETECT KEY TYPE
         if self.api_key.startswith("AIza"):
-            # Use Google Gemini
             try:
                 genai.configure(api_key=self.api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                response = model.generate_content(prompt)
-                return response.text
+                
+                # Try multiple models in case of 404
+                models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']
+                last_error = ""
+                
+                for model_name in models_to_try:
+                    try:
+                        model = genai.GenerativeModel(model_name)
+                        response = model.generate_content(prompt)
+                        return response.text
+                    except Exception as e:
+                        last_error = str(e)
+                        continue
+                
+                return f"Ошибка Gemini AI: Ни одна из доступных моделей не сработала. {last_error}"
+                
             except Exception as e:
-                return f"Ошибка Gemini AI: {str(e)}"
+                return f"Общая ошибка Gemini AI: {str(e)}"
         
         elif self.api_key.startswith("sk-"):
-            # Use OpenAI
             try:
                 client = openai.OpenAI(api_key=self.api_key)
                 response = client.chat.completions.create(
