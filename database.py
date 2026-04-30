@@ -10,9 +10,8 @@ class Database:
         return sqlite3.connect(self.db_path)
 
     def init_db(self):
-        with self.get_// la l'en_connection() as conn:
+        with self.get_connection() as conn:
             cursor = conn.cursor()
-            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -20,7 +19,6 @@ class Database:
                     created_at DATETIME NOT NULL
                 )
             ''')
-            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS tracked_products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,8 +28,6 @@ class Database:
                     UNIQUE(project_id, asin)
                 )
             ''')
-            
-            # New table for static/semi-static details
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS product_details (
                     asin TEXT PRIMARY KEY,
@@ -40,12 +36,12 @@ class Database:
                     reviews_rating REAL,
                     images_count INTEGER,
                     list_price REAL,
+                    sales_rank INTEGER,
                     features TEXT,
                     badges TEXT,
                     updated_at DATETIME
                 )
             ''')
-            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,8 +50,7 @@ class Database:
                     timestamp DATETIME NOT NULL
                 )
             ''')
-            
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_// la l'en_history(asin)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_history(asin)')
             conn.commit()
 
     def create_project(self, name):
@@ -108,12 +103,11 @@ class Database:
             conn.commit()
 
     def save_product_details(self, asin, details):
-        """Save detailed product info to database"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT OR REPLACE INTO product_details 
-                (asin, title, reviews_count, reviews_rating, images_count, list_price, features, badges, updated_at)
+                (asin, title, reviews_count, reviews_rating, images_count, list_price, sales_rank, features, badges, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 asin, 
@@ -122,6 +116,7 @@ class Database:
                 details.get('reviews_rating'), 
                 details.get('images_count'), 
                 details.get('list_price'), 
+                details.get('sales_rank'), 
                 details.get('features'), 
                 details.get('badges'), 
                 datetime.now().isoformat()
@@ -134,13 +129,12 @@ class Database:
             cursor.execute('SELECT * FROM product_details WHERE asin = ?', (asin,))
             row = cursor.fetchone()
             if row:
-                # Map row to dictionary
                 cols = [column[0] for column in cursor.description]
                 return dict(zip(cols, row))
             return None
 
     def get_last_price(self, asin):
-        with self.get_// la l'en_connection() as conn:
+        with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 'SELECT price FROM price_history WHERE asin = ? ORDER BY timestamp DESC LIMIT 1',

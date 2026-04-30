@@ -18,7 +18,7 @@ ai = AIAnalyst()
 client = KeepaClient()
 
 st.title("🏢 Amazon Competitor Intelligence Hub")
-st.markdown("Мониторинг цен, рейтинга и контента конкурентов")
+st.markdown("Мониторинг цен, продаж (BSR) и контента конкурентов")
 
 def run_monitor_cycle():
     asins = db.get_all_tracked_asins()
@@ -29,16 +29,13 @@ def run_monitor_cycle():
     for asin in asins:
         data = client.get_product_data(asin)
         if data:
-            # 1. Update Price
             price = client.extract_current_price(data, "new")
             if price:
                 db.save_price(asin, price)
             
-            # 2. Update Full Details (Reviews, Images, etc.)
             details = client.extract_full_details(data)
             if details:
                 db.save_product_details(asin, details)
-                
             updates_count += 1
     return f"Updated {updates_count}/{len(asins)} products."
 
@@ -48,11 +45,10 @@ def monitor_thread_loop():
         time.sleep(3600)
 
 if not st.session_state.monitor_running:
-    thread = threading.Thread(target=monitor_thread_loop, daemon=True)
+    thread = threading.Thread(target=monitor_// la l'en_loop, daemon=True)
     thread.start()
     st.session_state.monitor_running = True
 
-# --- SIDEBAR ---
 st.sidebar.header("📁 Projects")
 with st.sidebar.expander("➕ New Project"):
     new_proj_name = st.text_input("Project Name").strip()
@@ -78,7 +74,6 @@ if st.sidebar.button("Add"):
             st.sidebar.success("Added!")
             st.rerun()
 
-# --- MAIN ---
 st.header(f"Project: {selected_project_name}")
 
 col_sync_1, _ = st.columns([1, 4])
@@ -103,10 +98,10 @@ else:
         overview_data.append({
             "ASIN": asin, 
             "Price": price if price else "N/A",
+            "BSR (Rank)": details.get('sales_rank', 'N/A'),
             "Rating": details.get('reviews_rating', 'N/A'),
             "Reviews": details.get('reviews_count', 'N/A'),
-            "Images": details.get('images_count', 'N/A'),
-            "List Price": details.get('list_price', 'N/A')
+            "Images": details.get('images_count', 'N/A')
         })
     
     st.dataframe(pd.DataFrame(overview_data), use_container_width=True)
@@ -116,18 +111,16 @@ else:
     selected_asin = st.selectbox("Analyze Product", project_asins)
     
     if selected_asin:
-        # Product Details Card
         details = db.get_product_details(selected_asin)
         if details:
             with st.expander("📋 Product Specifications", expanded=True):
                 c1, c2, c3 = st.columns(3)
                 c1.write(f"**Title:** {details.get('title')}")
-                c2.write(f"**Images:** {details.get('images_count')}")
-                c3.write(f"**Badges:** {details.get('badges')}")
+                c2.write(f"**Sales Rank (BSR):** {details.get('sales_rank', 'N/A')}")
+                c3.write(f"**Images:** {details.get('images_count')}")
                 st.write(f"**Bullet Points:** {details.get('features')}")
                 st.write(f"**List Price:** {details.get('list_price')}$")
 
-        # Price Graph
         with db.get_connection() as conn:
             query = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
             df_history = pd.read_sql_query(query, conn)
@@ -138,16 +131,13 @@ else:
             fig.update_traces(line_color='#ff9900', line_width=3)
             st.plotly_chart(fig, use_container_width=True)
             
-            # AI ANALYSIS
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Current Price", f"${df_history['price'].iloc[-1]}")
+            col2.metric("Min Price", f"${df_history['price'].min()}")
+            col3.metric("Max Price", f"${df_history['price'].max()}")
+            
             if st.button(f"🤖 Get AI Strategic Report"):
-                with st.spinner("AI analyzing lauch, reviews and prices..."):
-                    # Combine price history and product details for the AI
-                    full_context = {
-                        "history": df_history.tail(20).to_string(),
-                        "details": str(details) if details else "No details"
-                    }
-                    # We pass this to the analyst (need to update ai_analyst.py to accept details)
-                    # For now, we just pass the df as before, but we will update AIAnalyst's prompt
+                with st.spinner("AI analyzing lauch, BSR, reviews and prices..."):
                     analysis = ai.analyze_trends(selected_asin, df_history) 
                     st.markdown("### 💡 AI Strategic Insights:")
                     st.markdown(analysis)

@@ -39,28 +39,28 @@ class KeepaClient:
         return latest_price / 100.0
 
     def extract_full_details(self, product_data):
-        """Extracts comprehensive product details from Keepa JSON"""
         if not product_data or "products" not in product_data:
             return None
         
         product = product_data["products"][0]
-        
-        # 1. Reviews
         reviews = product.get("reviews", {})
-        
-        # 2. Images
         images = product.get("images", [])
-        
-        # 3. Features (Bullet points)
         features = product.get("features", [])
         
-        # 4. List Price (Original price)
-        # In Keepa, list price is often in the 'stats' or separate field
         list_price = product.get("stats", {}).get("listPrice")
         if list_price and list_price != -1:
             list_price = list_price / 100.0
         else:
             list_price = None
+        
+        # EXTRACT SALES RANK
+        # In Keepa, sales rank is index 3 in the CSV arrays
+        csv = product.get("csv", [])
+        sales_rank = None
+        if len(csv) > 3:
+            sr_history = csv[3]
+            if sr_history:
+                sales_rank = sr_history[-1] # Last value is the current rank
 
         return {
             "title": product.get("title"),
@@ -68,6 +68,7 @@ class KeepaClient:
             "reviews_rating": reviews.get("rating"),
             "images_count": len(images),
             "list_price": list_price,
+            "sales_rank": sales_rank,
             "features": " | ".join(features) if features else "No features listed",
             "badges": product.get("badges", "None")
         }
