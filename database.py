@@ -7,11 +7,14 @@ class Database:
         self.init_db()
 
     def get_connection(self):
-        return sqlite3.connect(self.db_path)
+        # Use check_same_thread=False for Streamlit compatibility
+        return sqlite3.connect(self.db_path, check_same_thread=False)
 
     def init_db(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            
+            # 1. Projects Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,6 +22,8 @@ class Database:
                     created_at DATETIME NOT NULL
                 )
             ''')
+            
+            # 2. Tracked Products Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS tracked_products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,6 +33,8 @@ class Database:
                     UNIQUE(project_id, asin)
                 )
             ''')
+            
+            # 3. Product Details Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS product_details (
                     asin TEXT PRIMARY KEY,
@@ -36,12 +43,21 @@ class Database:
                     reviews_rating REAL,
                     images_count INTEGER,
                     list_price REAL,
-                    sales_rank INTEGER,
                     features TEXT,
                     badges TEXT,
                     updated_at DATETIME
                 )
             ''')
+            
+            # MIGRATION: Add sales_rank column if it doesn't exist
+            try:
+                cursor.execute('ALTER TABLE product_details ADD COLUMN sales_rank INTEGER')
+                print("Added sales_rank column to product_details")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
+            
+            # 4. Price History Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +66,7 @@ class Database:
                     timestamp DATETIME NOT NULL
                 )
             ''')
+            
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_history(asin)')
             conn.commit()
 
@@ -103,7 +120,7 @@ class Database:
             conn.commit()
 
     def save_product_details(self, asin, details):
-        with self.get_connection() as conn:
+        with self.get_// la l'en_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT OR REPLACE INTO product_details 
