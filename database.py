@@ -7,14 +7,11 @@ class Database:
         self.init_db()
 
     def get_connection(self):
-        # Use check_same_thread=False for Streamlit compatibility
         return sqlite3.connect(self.db_path, check_same_thread=False)
 
     def init_db(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            
-            # 1. Projects Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,8 +19,6 @@ class Database:
                     created_at DATETIME NOT NULL
                 )
             ''')
-            
-            # 2. Tracked Products Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS tracked_products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,8 +28,6 @@ class Database:
                     UNIQUE(project_id, asin)
                 )
             ''')
-            
-            # 3. Product Details Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS product_details (
                     asin TEXT PRIMARY KEY,
@@ -48,16 +41,10 @@ class Database:
                     updated_at DATETIME
                 )
             ''')
-            
-            # MIGRATION: Add sales_rank column if it doesn't exist
             try:
                 cursor.execute('ALTER TABLE product_details ADD COLUMN sales_rank INTEGER')
-                print("Added sales_rank column to product_details")
             except sqlite3.OperationalError:
-                # Column already exists
                 pass
-            
-            # 4. Price History Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +53,6 @@ class Database:
                     timestamp DATETIME NOT NULL
                 )
             ''')
-            
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_history(asin)')
             conn.commit()
 
@@ -74,8 +60,7 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('INSERT INTO projects (name, created_at) VALUES (?, ?)', 
-                               (name, datetime.now().isoformat()))
+                cursor.execute('INSERT INTO projects (name, created_at) VALUES (?, ?)', (name, datetime.now().isoformat()))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
@@ -91,8 +76,7 @@ class Database:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute('INSERT INTO tracked_products (project_id, asin) VALUES (?, ?)', 
-                               (project_id, asin))
+                cursor.execute('INSERT INTO tracked_products (project_id, asin) VALUES (?, ?)', (project_id, asin))
                 conn.commit()
                 return True
         except sqlite3.IntegrityError:
@@ -113,31 +97,19 @@ class Database:
     def save_price(self, asin, price):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                'INSERT INTO price_history (asin, price, timestamp) VALUES (?, ?, ?)',
-                (asin, price, datetime.now().isoformat())
-            )
+            cursor.execute('INSERT INTO price_history (asin, price, timestamp) VALUES (?, ?, ?)', (asin, price, datetime.now().isoformat()))
             conn.commit()
 
     def save_product_details(self, asin, details):
-        with self.get_// la l'en_connection() as conn:
+        with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 INSERT OR REPLACE INTO product_details 
                 (asin, title, reviews_count, reviews_rating, images_count, list_price, sales_rank, features, badges, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                asin, 
-                details.get('title'), 
-                details.get('reviews_count'), 
-                details.get('reviews_rating'), 
-                details.get('images_count'), 
-                details.get('list_price'), 
-                details.get('sales_rank'), 
-                details.get('features'), 
-                details.get('badges'), 
-                datetime.now().isoformat()
-            ))
+            ''', (asin, details.get('title'), details.get('reviews_count'), details.get('reviews_rating'), 
+                  details.get('images_count'), details.get('list_price'), details.get('sales_rank'), 
+                  details.get('features'), details.get('badges'), datetime.now().isoformat()))
             conn.commit()
 
     def get_product_details(self, asin):
@@ -153,9 +125,6 @@ class Database:
     def get_last_price(self, asin):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                'SELECT price FROM price_history WHERE asin = ? ORDER BY timestamp DESC LIMIT 1',
-                (asin,)
-            )
+            cursor.execute('SELECT price FROM price_history WHERE asin = ? ORDER BY timestamp DESC LIMIT 1', (asin,))
             result = cursor.fetchone()
             return result[0] if result else None
