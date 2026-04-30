@@ -46,8 +46,6 @@ class Database:
                 cursor.execute('ALTER TABLE product_details ADD COLUMN sales_rank INTEGER')
             except sqlite3.OperationalError:
                 pass
-            
-            # Price History
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,17 +54,6 @@ class Database:
                     timestamp DATETIME NOT NULL
                 )
             ''')
-            
-            # NEW: Sales Rank History
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS sales_rank_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    asin TEXT NOT NULL,
-                    rank INTEGER NOT NULL,
-                    timestamp DATETIME NOT NULL
-                )
-            ''')
-            
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin_p ON price_history(asin)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin_s ON sales_rank_history(asin)')
             conn.commit()
@@ -80,6 +67,24 @@ class Database:
                 return True
         except sqlite3.IntegrityError:
             return False
+
+    def delete_project(self, project_id):
+        """Delete project and all associated data"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # 1. Find all ASINs in this project to clean up history
+            cursor.execute('SELECT asin FROM tracked_products WHERE project_id = ?', (project_id,))
+            asins = [row[0] for row in cursor.fetchall()]
+            
+            for asin in asins:
+                cursor.execute('DELETE FROM price_history WHERE asin = ?', (asin,))
+                cursor.execute('DELETE FROM product_details WHERE asin = ?', (asin,))
+            
+            # 2. Delete project products and project itself
+            cursor.execute('DELETE FROM tracked_products WHERE project_id = ?', (project_id,))
+            cursor.execute('DELETE FROM projects WHERE id = ?', (project_id,))
+            conn.commit()
+            return True
 
     def get_projects(self):
         with self.get_connection() as conn:
@@ -96,6 +101,16 @@ class Database:
                 return True
         except sqlite3.IntegrityError:
             return False
+
+    def delete_asin(self, project_id, asin):
+        """Delete specific ASIN from project and clean history"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM tracked_products WHERE project_id = ? AND asin = ?', (project_id, asin))
+            cursor.execute('DELETE FROM price_history WHERE asin = ?', (asin,))
+            cursor.execute('DELETE FROM product_details WHERE asin = ?', (asin,))
+            conn.commit()
+            return True
 
     def get_asins_for_project(self, project_id):
         with self.get_connection() as conn:
@@ -115,12 +130,6 @@ class Database:
             cursor.execute('INSERT INTO price_history (asin, price, timestamp) VALUES (?, ?, ?)', (asin, price, datetime.now().isoformat()))
             conn.commit()
 
-    def save_sales_rank(self, asin, rank):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO sales_rank_history (asin, rank, timestamp) VALUES (?, ?, ?)', (asin, rank, datetime.now().isoformat()))
-            conn.commit()
-
     def save_product_details(self, asin, details):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -129,7 +138,7 @@ class Database:
                 (asin, title, reviews_count, reviews_rating, images_count, list_price, sales_rank, features, badges, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (asin, details.get('title'), details.get('reviews_count'), details.get('reviews_rating'), 
-                  details.get('images_count'), details.get('list_price'), details.get('sales_rank'), 
+                  details.get('images_count'), details.get('list_price'), details.get('sales_// l'en_rank'), 
                   details.get('features'), details.get('badges'), datetime.now().isoformat()))
             conn.commit()
 
@@ -149,10 +158,3 @@ class Database:
             cursor.execute('SELECT price FROM price_history WHERE asin = ? ORDER BY timestamp DESC LIMIT 1', (asin,))
             result = cursor.fetchone()
             return result[0] if result else None
-
-    def get_sales_history(self, asin):
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT timestamp, rank FROM sales_rank_history WHERE asin = ? ORDER BY timestamp ASC', (asin,))
-            rows = cursor.fetchall()
-            return pd.DataFrame(rows, columns=['timestamp', 'rank'])
