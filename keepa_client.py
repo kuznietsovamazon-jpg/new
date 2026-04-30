@@ -17,10 +17,23 @@ class KeepaClient:
             "domain": domain,
             "asin": asin
         }
-        response = requests.get(self.base_url, params=params)
-        if response.status_code != 200:
+        try:
+            # Added timeout to prevent hanging
+            response = requests.get(self.base_url, params=params, timeout=15)
+            if response.status_code != 200:
+                print(f"Keepa Error {response.status_code} for {asin}")
+                return None
+            
+            data = response.json()
+            # Keepa can return a response but with no products found
+            if not data or "products" not in data or not data["products"]:
+                print(f"No product data found for {asin}")
+                return None
+                
+            return data
+        except requests.exceptions.RequestException as e:
+            print(f"Connection error for {asin}: {e}")
             return None
-        return response.json()
 
     def extract_current_price(self, product_data, price_type="new"):
         if not product_data or "products" not in product_data:
@@ -39,7 +52,6 @@ class KeepaClient:
         return latest_price / 100.0
 
     def extract_sales_rank(self, product_data):
-        """Extracts current sales rank from Keepa data"""
         if not product_data or "products" not in product_data:
             return None
         product = product_data["products"][0]
@@ -63,7 +75,6 @@ class KeepaClient:
         else:
             list_price = None
         
-        # Use the method above for consistency
         sales_rank = self.extract_sales_rank(product_data)
 
         return {

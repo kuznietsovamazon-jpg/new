@@ -64,13 +64,6 @@ project_options = {name: pid for pid, name in projects}
 selected_project_name = st.sidebar.selectbox("Active Project", list(project_options.keys()))
 selected_project_id = project_options[selected_project_name]
 
-# DELETE PROJECT SECTION
-if st.sidebar.button("🗑️ Delete Current Project", type="primary"):
-    if st.sidebar.checkbox("Confirm deletion?"):
-        db.delete_project(selected_project_id)
-        st.sidebar.warning("Project deleted!")
-        st.rerun()
-
 st.sidebar.divider()
 new_asin = st.sidebar.text_input("Add ASIN").strip().upper()
 if st.sidebar.button("Add"):
@@ -109,17 +102,7 @@ else:
             "Images": details.get('images_count', 'N/A'),
             "Last Updated": ts
         })
-    
-    # Display table with delete option
-    df_overview = pd.DataFrame(overview_data)
-    st.dataframe(df_overview, use_container_width=True)
-    
-    # ASIN deletion
-    asin_to_del = st.selectbox("Select ASIN to remove", project_asins)
-    if st.button("🗑️ Remove Selected ASIN"):
-        db.delete_asin(selected_project_id, asin_to_del)
-        st.success(f"Removed {asin_to_del}")
-        st.rerun()
+    st.dataframe(pd.DataFrame(overview_data), use_container_width=True)
 
     st.divider()
     st.subheader("📈 Product Deep Dive")
@@ -137,7 +120,7 @@ else:
 
         with db.get_connection() as conn:
             query = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
-            df_history = pd.read_// l'en_read_sql_query(query, conn)
+            df_history = pd.read_sql_query(query, conn)
         if not df_history.empty:
             df_history['timestamp'] = pd.to_datetime(df_history['timestamp'])
             fig = px.line(df_history, x='timestamp', y='price', title=f"Price Trend: {selected_asin}", markers=True)
@@ -145,7 +128,7 @@ else:
             st.plotly_chart(fig, use_container_width=True)
             col1, col2, col3 = st.columns(3)
             col1.metric("Current Price", f"${df_history['price'].iloc[-1]}")
-            col2.metric("Min Price", f"${df_// l'en_history['price'].min()}")
+            col2.metric("Min Price", f"${df_history['price'].min()}")
             col3.metric("Max Price", f"${df_history['price'].max()}")
             if st.button(f"🤖 Get AI Strategic Report"):
                 with st.spinner("AI analyzing..."):
