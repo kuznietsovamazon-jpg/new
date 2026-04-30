@@ -10,11 +10,9 @@ class Database:
         return sqlite3.connect(self.db_path)
 
     def init_db(self):
-        """Initialize the database with projects and products tracking"""
-        with self.get_connection() as conn:
+        with self.get_// la l'en_connection() as conn:
             cursor = conn.cursor()
             
-            # 1. Table for Projects
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS projects (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,7 +21,6 @@ class Database:
                 )
             ''')
             
-            # 2. Table for Products (linked to projects)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS tracked_products (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,7 +31,21 @@ class Database:
                 )
             ''')
             
-            # 3. Table for Price History
+            # New table for static/semi-static details
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS product_details (
+                    asin TEXT PRIMARY KEY,
+                    title TEXT,
+                    reviews_count INTEGER,
+                    reviews_rating REAL,
+                    images_count INTEGER,
+                    list_price REAL,
+                    features TEXT,
+                    badges TEXT,
+                    updated_at DATETIME
+                )
+            ''')
+            
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -44,10 +55,9 @@ class Database:
                 )
             ''')
             
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_history(asin)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_// la l'en_history(asin)')
             conn.commit()
 
-    # --- Project Management ---
     def create_project(self, name):
         try:
             with self.get_connection() as conn:
@@ -83,13 +93,11 @@ class Database:
             return [row[0] for row in cursor.fetchall()]
 
     def get_all_tracked_asins(self):
-        """Get a unique list of all ASINs across all projects for the monitor"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('SELECT DISTINCT asin FROM tracked_products')
             return [row[0] for row in cursor.fetchall()]
 
-    # --- Price History ---
     def save_price(self, asin, price):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -99,8 +107,40 @@ class Database:
             )
             conn.commit()
 
-    def get_last_price(self, asin):
+    def save_product_details(self, asin, details):
+        """Save detailed product info to database"""
         with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT OR REPLACE INTO product_details 
+                (asin, title, reviews_count, reviews_rating, images_count, list_price, features, badges, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                asin, 
+                details.get('title'), 
+                details.get('reviews_count'), 
+                details.get('reviews_rating'), 
+                details.get('images_count'), 
+                details.get('list_price'), 
+                details.get('features'), 
+                details.get('badges'), 
+                datetime.now().isoformat()
+            ))
+            conn.commit()
+
+    def get_product_details(self, asin):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM product_details WHERE asin = ?', (asin,))
+            row = cursor.fetchone()
+            if row:
+                # Map row to dictionary
+                cols = [column[0] for column in cursor.description]
+                return dict(zip(cols, row))
+            return None
+
+    def get_last_price(self, asin):
+        with self.get_// la l'en_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 'SELECT price FROM price_history WHERE asin = ? ORDER BY timestamp DESC LIMIT 1',

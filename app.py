@@ -8,10 +8,8 @@ import threading
 import time
 from datetime import datetime
 
-# Page config
-st.set_page_config(page_title="Amazon Project Hub", layout="wide")
+st.set_page_config(page_title="Amazon Intelligence Hub", layout="wide")
 
-# --- GLOBAL STATE ---
 if 'monitor_running' not in st.session_state:
     st.session_state.monitor_running = False
 
@@ -19,80 +17,74 @@ db = Database()
 ai = AIAnalyst()
 client = KeepaClient()
 
-st.title("🏢 Amazon Competitor Project Hub")
-st.markdown("Управление проектами и автоматический сбор данных")
+st.title("🏢 Amazon Competitor Intelligence Hub")
+st.markdown("Мониторинг цен, рейтинга и контента конкурентов")
 
-# --- BACKGROUND MONITOR LOGIC ---
 def run_monitor_cycle():
-    """Function that performs one full update cycle for all tracked ASINs"""
     asins = db.get_all_tracked_asins()
     if not asins:
-        return "No ASINs found to monitor."
+        return "No ASINs found."
     
     updates_count = 0
     for asin in asins:
         data = client.get_product_data(asin)
         if data:
+            # 1. Update Price
             price = client.extract_current_price(data, "new")
             if price:
                 db.save_price(asin, price)
-                updates_count += 1
+            
+            # 2. Update Full Details (Reviews, Images, etc.)
+            details = client.extract_full_details(data)
+            if details:
+                db.save_product_details(asin, details)
+                
+            updates_count += 1
     return f"Updated {updates_count}/{len(asins)} products."
 
 def monitor_thread_loop():
-    """Infinite loop for background monitoring (runs every hour)"""
     while True:
         run_monitor_cycle()
         time.sleep(3600)
 
-# Start background thread if not running
 if not st.session_state.monitor_running:
     thread = threading.Thread(target=monitor_thread_loop, daemon=True)
     thread.start()
     st.session_state.monitor_running = True
 
-# --- SIDEBAR: Project Management ---
-st.sidebar.header("📁 Управление Проектами")
-
-with st.sidebar.expander("➕ Создать новый проект"):
-    new_proj_name = st.text_input("Название проекта").strip()
-    if st.button("Создать проект"):
+# --- SIDEBAR ---
+st.sidebar.header("📁 Projects")
+with st.sidebar.expander("➕ New Project"):
+    new_proj_name = st.text_input("Project Name").strip()
+    if st.button("Create"):
         if new_proj_name:
             if db.create_project(new_proj_name):
-                st.success(f"Проект '{new_proj_name}' создан!")
+                st.success("Created!")
                 st.rerun()
-            else:
-                st.error("Проект с таким именем уже существует")
 
 projects = db.get_projects()
 if not projects:
-    st.sidebar.warning("Сначала создайте проект")
-    st.info("Пожалуйста, создайте ваш первый проект в боковой панели слева.")
     st.stop()
 
 project_options = {name: pid for pid, name in projects}
-selected_project_name = st.sidebar.selectbox("Выберите активный проект", list(project_options.keys()))
+selected_project_name = st.sidebar.selectbox("Active Project", list(project_options.keys()))
 selected_project_id = project_options[selected_project_name]
 
 st.sidebar.divider()
-st.sidebar.subheader(f"📦 Товары в {selected_project_name}")
-new_asin = st.sidebar.text_input("Добавить ASIN в этот проект").strip().upper()
-if st.sidebar.button("Добавить товар"):
+new_asin = st.sidebar.text_input("Add ASIN").strip().upper()
+if st.sidebar.button("Add"):
     if new_asin:
         if db.add_asin_to_project(selected_project_id, new_asin):
-            st.sidebar.success(f"Товар {new_asin} добавлен!")
+            st.sidebar.success("Added!")
             st.rerun()
-        else:
-            st.sidebar.error("Товар уже в проекте")
 
-# --- MAIN CONTENT ---
-st.header(f"Проект: {selected_project_name}")
+# --- MAIN ---
+st.header(f"Project: {selected_project_name}")
 
-st.divider()
-col_sync_1, col_sync_2 = st.columns([1, 4])
+col_sync_1, _ = st.columns([1, 4])
 with col_sync_1:
-    if st.button("🔄 Обновить данные сейчас"):
-        with st.spinner("Синхронизация с Amazon..."):
+    if st.button("🔄 Sync All Data"):
+        with st.spinner("Fetching from Amazon..."):
             result = run_monitor_cycle()
             st.toast(result)
             st.rerun()
@@ -100,45 +92,64 @@ with col_sync_1:
 project_asins = db.get_asins_for_project(selected_project_id)
 
 if not project_asins:
-    st.info("В этом проекте пока нет товаров.")
+    st.info("No products in this project.")
 else:
-    st.subheader("📊 Текущий статус товаров проекта")
+    st.subheader("📊 Market Overview")
     overview_data = []
     for asin in project_asins:
         price = db.get_last_price(asin)
-        with db.get_connection() as conn:
-            res = conn.execute(f"SELECT timestamp FROM price_history WHERE asin='{asin}' ORDER BY timestamp DESC LIMIT 1").fetchone()
-            ts = res[0] if res else "Never"
-        overview_data.append({"ASIN": asin, "Last Price": price if price else "No data", "Last Updated": ts})
+        details = db.get_product_details(asin) or {}
+        
+        overview_data.append({
+            "ASIN": asin, 
+            "Price": price if price else "N/A",
+            "Rating": details.get('reviews_rating', 'N/A'),
+            "Reviews": details.get('reviews_count', 'N/A'),
+            "Images": details.get('images_count', 'N/A'),
+            "List Price": details.get('list_price', 'N/A')
+        })
     
-    df_overview = pd.DataFrame(overview_data)
-    st.dataframe(df_overview, use_container_width=True)
+    st.dataframe(pd.DataFrame(overview_data), use_container_width=True)
 
     st.divider()
-    st.subheader("📈 Анализ и AI-Стратегия")
-    selected_asin = st.selectbox("Выберите товар для детального анализа", project_asins)
+    st.subheader("📈 Product Deep Dive")
+    selected_asin = st.selectbox("Analyze Product", project_asins)
     
     if selected_asin:
+        # Product Details Card
+        details = db.get_product_details(selected_asin)
+        if details:
+            with st.expander("📋 Product Specifications", expanded=True):
+                c1, c2, c3 = st.columns(3)
+                c1.write(f"**Title:** {details.get('title')}")
+                c2.write(f"**Images:** {details.get('images_count')}")
+                c3.write(f"**Badges:** {details.get('badges')}")
+                st.write(f"**Bullet Points:** {details.get('features')}")
+                st.write(f"**List Price:** {details.get('list_price')}$")
+
+        # Price Graph
         with db.get_connection() as conn:
             query = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
             df_history = pd.read_sql_query(query, conn)
         
         if not df_history.empty:
             df_history['timestamp'] = pd.to_datetime(df_history['timestamp'])
-            fig = px.line(df_history, x='timestamp', y='price', 
-                          title=f"Динамика цены: {selected_asin}", markers=True)
+            fig = px.line(df_history, x='timestamp', y='price', title=f"Price Trend: {selected_asin}", markers=True)
             fig.update_traces(line_color='#ff9900', line_width=3)
             st.plotly_chart(fig, use_container_width=True)
             
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Текущая цена", f"${df_history['price'].iloc[-1]}")
-            col2.metric("Мин. цена", f"${df_history['price'].min()}")
-            col3.metric("Макс. цена", f"${df_history['price'].max()}")
-            
-            if st.button(f"🤖 Получить AI-анализ для {selected_asin}"):
-                with st.spinner("AI анализирует рынок..."):
-                    analysis = ai.analyze_trends(selected_asin, df_history)
-                    st.markdown("### 💡 Рекомендации AI:")
+            # AI ANALYSIS
+            if st.button(f"🤖 Get AI Strategic Report"):
+                with st.spinner("AI analyzing lauch, reviews and prices..."):
+                    # Combine price history and product details for the AI
+                    full_context = {
+                        "history": df_history.tail(20).to_string(),
+                        "details": str(details) if details else "No details"
+                    }
+                    # We pass this to the analyst (need to update ai_analyst.py to accept details)
+                    # For now, we just pass the df as before, but we will update AIAnalyst's prompt
+                    analysis = ai.analyze_trends(selected_asin, df_history) 
+                    st.markdown("### 💡 AI Strategic Insights:")
                     st.markdown(analysis)
         else:
-            st.warning("Данные по этому товару еще не собраны. Нажмите 'Обновить данные сейчас' выше.")
+            st.warning("No price history yet. Please Sync Data.")

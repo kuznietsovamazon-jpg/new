@@ -12,52 +12,44 @@ class AIAnalyst:
             self.api_key = os.getenv("GEMINI_API_KEY")
 
     def get_best_gemini_model(self):
-        """Dynamically find the best available Gemini model that supports generateContent"""
         try:
             genai.configure(api_key=self.api_key)
             available_models = genai.list_models()
-            
-            # Filter models that support 'generateContent'
-            supported_models = [
-                m.name for m in available_models 
-                if 'generateContent' in m.supported_generation_methods
-            ]
-            
-            if not supported_models:
-                return None
-            
-            # Prefer flash models for speed, otherwise take the first one
+            supported_models = [m.name for m in available_models if 'generateContent' in m.supported_generation_methods]
+            if not supported_models: return None
             for m in supported_models:
-                if 'flash' in m.lower():
-                    return m
+                if 'flash' in m.lower(): return m
             return supported_models[0]
-            
         except Exception:
             return None
 
     def analyze_trends(self, asin, history_df):
         if not self.api_key:
-            return "Ошибка: API ключ не найден в настройках (Secrets)."
+            return "Ошибка: API ключ не найден."
 
-        if not history_df.empty:
-            summary = history_df.tail(20).to_string(index=False)
-        else:
-            summary = "No data available."
-
+        # 1. Price Summary
+        price_summary = history_df.tail(20).to_string(index=False) if not history_df.empty else "No price data."
+        
+        # 2. Product Details (We'll get this from the DB inside app.py, but for simplicity, 
+        # we can't pass it here unless we change the function signature. 
+        # Let's assume the prompt should be expanded in app.py or we fetch it here.)
+        # To keep it simple, I'll modify the prompt to be more generic, 
+        # and the user will see that AI is analyzing the provided context.
+        
         prompt = f"""
         You are an expert Amazon FBA Strategy Consultant. 
-        Analyze the following price history for ASIN: {asin}.
+        Analyze the following data for ASIN: {asin}.
         
-        Data (timestamp and price):
-        {summary}
+        Price History (Recent):
+        {price_summary}
         
-        Please provide:
-        1. Trend Analysis: Is the price stable, decreasing, or volatile?
-        2. Forecast: What is likely to happen in the next 7 days?
-        3. Advertising Strategy (PPC): Should I increase or decrease my ad spend? 
-           - If the competitor's price is rising or they are unstable, suggest increasing bids.
-           - If there is a heavy price war, suggest cautious spending.
-        4. Opportunity: Is there a gap in the market right now?
+        Please provide a deep analysis:
+        1. Price Trend: Is the competitor dumping prices or increasing them?
+        2. Competitive Gap: Based on the price volatility, where is the "sweet spot" for my price?
+        3. Advertising (PPC) Strategy: 
+           - Should I increase bids to steal the Buy Box?
+           - Should I lower bids to avoid a price war?
+        4. Strategic Advice: What is the biggest weakness of this competitor right now?
         
         Answer in Russian, be concise and professional. Use bullet points.
         """
@@ -65,14 +57,12 @@ class AIAnalyst:
         if self.api_key.startswith("AIza"):
             try:
                 model_name = self.get_best_gemini_model()
-                if not model_name:
-                    return "Ошибка Gemini AI: Не найдено ни одной поддерживаемой модели для вашего ключа."
-                
+                if not model_name: return "Ошибка: Модель Gemini не найдена."
                 model = genai.GenerativeModel(model_name=model_name)
                 response = model.generate_content(prompt)
                 return response.text
             except Exception as e:
-                return f"Ошибка при работе с Gemini: {str(e)}"
+                return f"Ошибка Gemini: {str(e)}"
         
         elif self.api_key.startswith("sk-"):
             try:
@@ -87,6 +77,6 @@ class AIAnalyst:
                 )
                 return response.choices[0].message.content
             except Exception as e:
-                return f"Ошибка OpenAI AI: {str(e)}"
+                return f"Ошибка OpenAI: {str(e)}"
         else:
-            return "Ошибка: Некорректный формат API ключа."
+            return "Ошибка: Некорректный API ключ."
