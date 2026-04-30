@@ -11,10 +11,31 @@ class AIAnalyst:
         if not self.api_key:
             self.api_key = os.getenv("GEMINI_API_KEY")
 
+    def get_best_gemini_model(self):
+        """Dynamically find the best available Gemini model that supports generateContent"""
+        try:
+            genai.configure(api_key=self.api_key)
+            available_models = genai.list_models()
+            
+            # Filter models that support 'generateContent'
+            supported_models = [
+                m.name for m in available_models 
+                if 'generateContent' in m.supported_generation_methods
+            ]
+            
+            if not supported_models:
+                return None
+            
+            # Prefer flash models for speed, otherwise take the first one
+            for m in supported_models:
+                if 'flash' in m.lower():
+                    return m
+            return supported_models[0]
+            
+        except Exception:
+            return None
+
     def analyze_trends(self, asin, history_df):
-        """
-        Analyzes price history using either OpenAI or Google Gemini depending on the key.
-        """
         if not self.api_key:
             return "Ошибка: API ключ не найден в настройках (Secrets)."
 
@@ -43,25 +64,15 @@ class AIAnalyst:
 
         if self.api_key.startswith("AIza"):
             try:
-                genai.configure(api_key=self.api_key)
+                model_name = self.get_best_gemini_model()
+                if not model_name:
+                    return "Ошибка Gemini AI: Не найдено ни одной поддерживаемой модели для вашего ключа."
                 
-                # Try multiple models in case of 404
-                models_to_try = ['gemini-1.5-flash', 'gemini-pro', 'gemini-1.0-pro']
-                last_error = ""
-                
-                for model_name in models_to_try:
-                    try:
-                        model = genai.GenerativeModel(model_name)
-                        response = model.generate_content(prompt)
-                        return response.text
-                    except Exception as e:
-                        last_error = str(e)
-                        continue
-                
-                return f"Ошибка Gemini AI: Ни одна из доступных моделей не сработала. {last_error}"
-                
+                model = genai.GenerativeModel(model_name=model_name)
+                response = model.generate_content(prompt)
+                return response.text
             except Exception as e:
-                return f"Общая ошибка Gemini AI: {str(e)}"
+                return f"Ошибка при работе с Gemini: {str(e)}"
         
         elif self.api_key.startswith("sk-"):
             try:
@@ -78,4 +89,4 @@ class AIAnalyst:
             except Exception as e:
                 return f"Ошибка OpenAI AI: {str(e)}"
         else:
-            return "Ошибка: Некорректный формат API ключа. Ключ должен начинаться с 'sk-' (OpenAI) или 'AIza' (Gemini)."
+            return "Ошибка: Некорректный формат API ключа."
