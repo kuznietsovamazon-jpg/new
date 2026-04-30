@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -116,7 +117,7 @@ else:
                 c2.write(f"**Sales Rank (BSR):** {details.get('sales_rank', 'N/A')}")
                 c3.write(f"**Images:** {details.get('images_count')}")
                 st.write(f"**Bullet Points:** {details.get('features')}")
-                st.write(f"**List Price:** {details.get('list_// l'en_price')}$")
+                st.write(f"**List Price:** {details.get('list_price')}$")
 
         with db.get_connection() as conn:
             query = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
