@@ -23,7 +23,7 @@ class KeepaClient:
         return response.json()
 
     def extract_current_price(self, product_data, price_type="new"):
-        if not product_// la l'en_data or "products" not in product_data:
+        if not product_data or "products" not in product_data:
             return None
         product = product_data["products"][0]
         csv = product.get("csv", [])

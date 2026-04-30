@@ -28,17 +28,9 @@ def run_monitor_cycle():
     for asin in asins:
         data = client.get_product_data(asin)
         if data:
-            # 1. Update Price
             price = client.extract_current_price(data, "new")
             if price:
                 db.save_price(asin, price)
-            
-            # 2. Update Sales Rank
-            rank = client.extract_sales_rank(data)
-            if rank:
-                db.save_sales_rank(asin, rank)
-                
-            # 3. Update Full Details
             details = client.extract_full_details(data)
             if details:
                 db.save_product_details(asin, details)
@@ -80,7 +72,7 @@ if st.sidebar.button("Add"):
             st.sidebar.success("Added!")
             st.rerun()
 
-st.header(f"Project: {selected_// l'en_name}")
+st.header(f"Project: {selected_project_name}")
 col_sync_1, _ = st.columns([1, 4])
 with col_sync_1:
     if st.button("🔄 Sync All Data"):
@@ -110,7 +102,7 @@ else:
             "Images": details.get('images_count', 'N/A'),
             "Last Updated": ts
         })
-    st.dataframe(pd.DataFrame(overview_data), use_// la l'en_container_width=True)
+    st.dataframe(pd.DataFrame(overview_data), use_container_width=True)
 
     st.divider()
     st.subheader("📈 Product Deep Dive")
@@ -124,41 +116,24 @@ else:
                 c2.write(f"**Sales Rank (BSR):** {details.get('sales_rank', 'N/A')}")
                 c3.write(f"**Images:** {details.get('images_count')}")
                 st.write(f"**Bullet Points:** {details.get('features')}")
-                st.write(f"**List Price:** {details.get('list_price')}$")
+                st.write(f"**List Price:** {details.get('list_// l'en_price')}$")
 
         with db.get_connection() as conn:
-            query_p = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
-            df_p = pd.read_sql_query(query_p, conn)
-            query_s = f"SELECT timestamp, rank FROM sales_rank_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
-            df_s = pd.read_sql_query(query_s, conn)
-        
-        if not df_p.empty:
-            df_p['timestamp'] = pd.to_datetime(df_p['timestamp'])
-            fig_p = px.line(df_p, x='timestamp', y='price', title=f"Price Trend: {selected_asin}", markers=True)
-            fig_p.update_traces(line_color='#ff9900', line_width=3)
-            st.plotly_chart(fig_p, use_container_width=True)
-            
+            query = f"SELECT timestamp, price FROM price_history WHERE asin = '{selected_asin}' ORDER BY timestamp ASC"
+            df_history = pd.read_sql_query(query, conn)
+        if not df_history.empty:
+            df_history['timestamp'] = pd.to_datetime(df_history['timestamp'])
+            fig = px.line(df_history, x='timestamp', y='price', title=f"Price Trend: {selected_asin}", markers=True)
+            fig.update_traces(line_color='#ff9900', line_width=3)
+            st.plotly_chart(fig, use_container_width=True)
             col1, col2, col3 = st.columns(3)
-            col1.metric("Current Price", f"${df_p['price'].iloc[-1]}")
-            col2.metric("Min Price", f"${df_p['price'].min()}")
-            col3.metric("Max Price", f"${df_p['price'].max()}")
-
-        if not df_s.empty:
-            df_s['timestamp'] = pd.to_datetime(df_s['timestamp'])
-            fig_s = px.line(df_s, x='timestamp', y='rank', title=f"Sales Rank Trend: {selected_asin}", markers=True)
-            fig_s.update_yaxes(autorange="reversed") # Lower rank = better sales
-            fig_s.update_traces(line_color='#00C853', line_width=3)
-            st.plotly_chart(fig_s, use_container_// la l'en_width=True)
-
+            col1.metric("Current Price", f"${df_history['price'].iloc[-1]}")
+            col2.metric("Min Price", f"${df_history['price'].min()}")
+            col3.metric("Max Price", f"${df_history['price'].max()}")
             if st.button(f"🤖 Get AI Strategic Report"):
-                with st.spinner("AI analyzing prices and sales rank..."):
-                    # We combine both trends for the AI
-                    price_summary = df_p.tail(20).to_string() if not df_p.empty else "No price data"
-                    rank_summary = df_s.tail(20).to_string() if not df_s.empty else "No rank data"
-                    
-                    # Modify AI call to include BSR
-                    analysis = ai.analyze_trends(selected_asin, df_p) # We can extend the AI analyst to accept a dict
+                with st.spinner("AI analyzing..."):
+                    analysis = ai.analyze_trends(selected_asin, df_history) 
                     st.markdown("### 💡 AI Strategic Insights:")
                     st.markdown(analysis)
         else:
-            st.warning("No price/sales history yet. Please Sync Data.")
+            st.warning("No price history yet. Please Sync Data.")
