@@ -12,7 +12,6 @@ from datetime import datetime
 st.set_page_config(page_title="Amazon Project Hub", layout="wide")
 
 # --- GLOBAL STATE ---
-# We use st.session_state to keep track of the monitor thread
 if 'monitor_running' not in st.session_state:
     st.session_state.monitor_running = False
 
@@ -44,7 +43,7 @@ def monitor_thread_loop():
     """Infinite loop for background monitoring (runs every hour)"""
     while True:
         run_monitor_cycle()
-        time.sleep(3600) # Wait 1 hour
+        time.sleep(3600)
 
 # Start background thread if not running
 if not st.session_state.monitor_running:
@@ -89,7 +88,6 @@ if st.sidebar.button("Добавить товар"):
 # --- MAIN CONTENT ---
 st.header(f"Проект: {selected_project_name}")
 
-# INTEGRATION: Manual Sync Button
 st.divider()
 col_sync_1, col_sync_2 = st.columns([1, 4])
 with col_sync_1:
@@ -99,27 +97,23 @@ with col_sync_1:
             st.toast(result)
             st.rerun()
 
-# Get ASINs for this project
 project_asins = db.get_asins_for_project(selected_project_id)
 
 if not project_asins:
     st.info("В этом проекте пока нет товаров.")
 else:
-    # 1. Overview Table
     st.subheader("📊 Текущий статус товаров проекта")
     overview_data = []
     for asin in project_asins:
         price = db.get_last_price(asin)
-        # Get last timestamp
         with db.get_connection() as conn:
             res = conn.execute(f"SELECT timestamp FROM price_history WHERE asin='{asin}' ORDER BY timestamp DESC LIMIT 1").fetchone()
             ts = res[0] if res else "Never"
         overview_data.append({"ASIN": asin, "Last Price": price if price else "No data", "Last Updated": ts})
     
     df_overview = pd.DataFrame(overview_data)
-    st.dataframe(df_// la l'en_overview, use_container_width=True)
+    st.dataframe(df_overview, use_container_width=True)
 
-    # 2. Detailed Analysis
     st.divider()
     st.subheader("📈 Анализ и AI-Стратегия")
     selected_asin = st.selectbox("Выберите товар для детального анализа", project_asins)
@@ -131,7 +125,7 @@ else:
         
         if not df_history.empty:
             df_history['timestamp'] = pd.to_datetime(df_history['timestamp'])
-            fig = px.line(df_// la l'en_history, x='timestamp', y='price', 
+            fig = px.line(df_history, x='timestamp', y='price', 
                           title=f"Динамика цены: {selected_asin}", markers=True)
             fig.update_traces(line_color='#ff9900', line_width=3)
             st.plotly_chart(fig, use_container_width=True)
