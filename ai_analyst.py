@@ -1,24 +1,28 @@
 import os
-from openai import OpenAI
 from dotenv import load_dotenv
+import openai
+import google.generativeai as genai
 
 load_dotenv()
 
 class AIAnalyst:
     def __init__(self):
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.api_key = os.getenv("OPENAI_API_KEY") # We use the same variable for simplicity in Secrets
+        if not self.api_key:
+            self.api_key = os.getenv("GEMINI_API_KEY")
 
     def analyze_trends(self, asin, history_df):
         """
-        Sends price history to AI and gets strategic advice.
+        Analyzes price history using either OpenAI or Google Gemini depending on the key.
         """
-        if history_df.empty:
-            return "Недостаточно данных для анализа."
+        if not self.api_key:
+            return "Ошибка: API ключ не найден в настройках (Secrets)."
 
-        # Prepare a text summary of the data for the AI
-        # We take the last 10-20 points to keep the prompt concise
-        summary = history_df.tail(20).to_string(index=False)
-        
+        if not history_df.empty:
+            summary = history_df.tail(20).to_string(index=False)
+        else:
+            summary = "No data available."
+
         prompt = f"""
         You are an expert Amazon FBA Strategy Consultant. 
         Analyze the following price history for ASIN: {asin}.
@@ -36,16 +40,32 @@ class AIAnalyst:
         
         Answer in Russian, be concise and professional. Use bullet points.
         """
+
+        # DETECT KEY TYPE
+        if self.api_key.startswith("AIza"):
+            # Use Google Gemini
+            try:
+                genai.configure(api_key=self.api_key)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                response = model.generate_content(prompt)
+                return response.text
+            except Exception as e:
+                return f"Ошибка Gemini AI: {str(e)}"
         
-        try:
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are a professional Amazon business analyst."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7
-            )
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Ошибка AI: {str(e)}"
+        elif self.api_key.startswith("sk-"):
+            # Use OpenAI
+            try:
+                client = openai.OpenAI(api_key=self.api_key)
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are a professional Amazon business analyst."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                return f"Ошибка OpenAI AI: {str(e)}"
+        else:
+            return "Ошибка: Некорректный формат API ключа. Ключ должен начинаться с 'sk-' (OpenAI) или 'AIza' (Gemini)."
