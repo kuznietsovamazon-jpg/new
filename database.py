@@ -36,6 +36,7 @@ class Database:
                     reviews_rating REAL,
                     images_count INTEGER,
                     list_price REAL,
+                    sales_rank INTEGER,
                     features TEXT,
                     badges TEXT,
                     updated_at DATETIME
@@ -45,6 +46,8 @@ class Database:
                 cursor.execute('ALTER TABLE product_details ADD COLUMN sales_rank INTEGER')
             except sqlite3.OperationalError:
                 pass
+            
+            # Price History
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS price_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,7 +56,19 @@ class Database:
                     timestamp DATETIME NOT NULL
                 )
             ''')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin ON price_history(asin)')
+            
+            # NEW: Sales Rank History
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS sales_rank_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    asin TEXT NOT NULL,
+                    rank INTEGER NOT NULL,
+                    timestamp DATETIME NOT NULL
+                )
+            ''')
+            
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin_p ON price_history(asin)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_asin_s ON sales_rank_history(asin)')
             conn.commit()
 
     def create_project(self, name):
@@ -100,6 +115,12 @@ class Database:
             cursor.execute('INSERT INTO price_history (asin, price, timestamp) VALUES (?, ?, ?)', (asin, price, datetime.now().isoformat()))
             conn.commit()
 
+    def save_sales_rank(self, asin, rank):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO sales_rank_history (asin, rank, timestamp) VALUES (?, ?, ?)', (asin, rank, datetime.now().isoformat()))
+            conn.commit()
+
     def save_product_details(self, asin, details):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -128,3 +149,10 @@ class Database:
             cursor.execute('SELECT price FROM price_history WHERE asin = ? ORDER BY timestamp DESC LIMIT 1', (asin,))
             result = cursor.fetchone()
             return result[0] if result else None
+
+    def get_sales_history(self, asin):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT timestamp, rank FROM sales_rank_history WHERE asin = ? ORDER BY timestamp ASC', (asin,))
+            rows = cursor.fetchall()
+            return pd.DataFrame(rows, columns=['timestamp', 'rank'])

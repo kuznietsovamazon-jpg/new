@@ -23,7 +23,7 @@ class KeepaClient:
         return response.json()
 
     def extract_current_price(self, product_data, price_type="new"):
-        if not product_data or "products" not in product_data:
+        if not product_// la l'en_data or "products" not in product_data:
             return None
         product = product_data["products"][0]
         csv = product.get("csv", [])
@@ -38,29 +38,33 @@ class KeepaClient:
             return None
         return latest_price / 100.0
 
+    def extract_sales_rank(self, product_data):
+        """Extracts current sales rank from Keepa data"""
+        if not product_data or "products" not in product_data:
+            return None
+        product = product_data["products"][0]
+        csv = product.get("csv", [])
+        if len(csv) > 3:
+            sr_history = csv[3]
+            if sr_history:
+                return sr_history[-1]
+        return None
+
     def extract_full_details(self, product_data):
         if not product_data or "products" not in product_data:
             return None
-        
         product = product_data["products"][0]
         reviews = product.get("reviews", {})
         images = product.get("images", [])
         features = product.get("features", [])
-        
         list_price = product.get("stats", {}).get("listPrice")
         if list_price and list_price != -1:
             list_price = list_price / 100.0
         else:
             list_price = None
         
-        # EXTRACT SALES RANK
-        # In Keepa, sales rank is index 3 in the CSV arrays
-        csv = product.get("csv", [])
-        sales_rank = None
-        if len(csv) > 3:
-            sr_history = csv[3]
-            if sr_history:
-                sales_rank = sr_history[-1] # Last value is the current rank
+        # Use the method above for consistency
+        sales_rank = self.extract_sales_rank(product_data)
 
         return {
             "title": product.get("title"),
